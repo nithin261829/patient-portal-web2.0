@@ -1,0 +1,234 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Typography */
+  --font-size: 16px;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+
+  /* Brand Colors - Purple Theme (matches clinic-assist-portal) */
+  --primary: #6200ea; /* deep purple */
+  --primary-light: #bb86fc; /* light purple */
+  --primary-dark: #3700b3; /* darker purple */
+  --primary-foreground: #ffffff;
+
+  /* Secondary - Light purple */
+  --secondary: #f3e5f5; /* purple-50 */
+  --secondary-foreground: #4a148c; /* purple-900 */
+
+  /* Accent (Amber for highlights) */
+  --accent: #ffc107; /* amber */
+  --accent-foreground: #000000;
+
+  /* Semantic Colors (matches clinic-assist-portal) */
+  --success: #4caf50; /* green */
+  --success-foreground: #ffffff;
+  --warning: #ff9800; /* orange */
+  --warning-foreground: #ffffff;
+  --error: #b00020; /* red */
+  --error-foreground: #ffffff;
+  --info: #2196f3; /* blue */
+  --info-foreground: #ffffff;
+
+  /* Neutrals */
+  --background: #f4f6f8; /* matches clinic-assist-portal */
+  --foreground: #000000;
+  --surface: #ffffff;
+  --surface-foreground: #000000;
+
+  --muted: #F3F4F6; /* gray-100 */
+  --muted-foreground: #6B7280; /* gray-500 */
+
+  /* Popover (dropdowns, tooltips) */
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2937;
+
+  --border: #E5E7EB; /* gray-200 */
+  --input: #F9FAFB; /* gray-50 */
+  --input-border: #D1D5DB; /* gray-300 */
+
+  /* Destructive */
+  --destructive: #d32f2f;
+  --destructive-foreground: #ffffff;
+
+  /* Ring (focus states) */
+  --ring: #6200ea;
+
+  /* Card */
+  --card: #ffffff;
+  --card-foreground: #000000;
+
+  /* Sidebar */
+  --sidebar: #e8def8; /* light purple - matches clinic-assist-portal */
+  --sidebar-foreground: #000000;
+  --sidebar-primary: #6200ea;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f4f6f8;
+  --sidebar-accent-foreground: #000000;
+  --sidebar-border: #E5E7EB;
+  --sidebar-ring: #6200ea;
+
+  /* Radius */
+  --radius: 0.625rem; /* 10px - matches clinic-assist-portal */
+}
+
+.dark {
+  --primary: #bb86fc; /* light purple for dark mode */
+  --primary-light: #e0b3ff;
+  --primary-dark: #6200ea;
+  --primary-foreground: #000000;
+
+  --secondary: #4a148c; /* purple-900 */
+  --secondary-foreground: #f3e5f5;
+
+  --accent: #ffc107;
+  --accent-foreground: #000000;
+
+  --background: #111827; /* gray-900 */
+  --foreground: #F9FAFB; /* gray-50 */
+  --surface: #1F2937; /* gray-800 */
+  --surface-foreground: #F9FAFB;
+
+  --muted: #374151; /* gray-700 */
+  --muted-foreground: #9CA3AF; /* gray-400 */
+
+  --popover: #1F2937;
+  --popover-foreground: #F9FAFB;
+
+  --border: #374151;
+  --input: #1F2937;
+  --input-border: #4B5563;
+
+  --destructive: #F87171; /* red-400 */
+  --destructive-foreground: #111827;
+
+  --ring: #bb86fc;
+
+  --card: #1F2937;
+  --card-foreground: #F9FAFB;
+
+  --sidebar: #1F2937;
+  --sidebar-foreground: #F9FAFB;
+  --sidebar-primary: #bb86fc;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: #374151;
+  --sidebar-accent-foreground: #F9FAFB;
+  --sidebar-border: #374151;
+  --sidebar-ring: #bb86fc;
+}
+
+@theme inline {
+  /* Map CSS variables to Tailwind */
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-error: var(--error);
+  --color-error-foreground: var(--error-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-border: var(--input-border);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-ring: var(--ring);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h4 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  label {
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  button {
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  input, textarea, select {
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+  }
+}
