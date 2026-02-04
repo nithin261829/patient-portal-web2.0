@@ -9,7 +9,7 @@ import { Phone, Calendar, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { useAuthStore } from '@/stores/auth-store'
 import { apiService } from '@/services/api'
 import { environment } from '@/config/environment'
@@ -29,11 +29,12 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const { setToken, setPatient, clientId, orgId } = useAuthStore()
+  const { setToken, setPatient, clientId, orgId, clinic } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
   const [showOtpVerification, setShowOtpVerification] = useState(false)
   const [pendingPhoneNumber, setPendingPhoneNumber] = useState('')
   const [pendingPatientId, setPendingPatientId] = useState('')
+  const [logoError, setLogoError] = useState(false)
 
   const {
     register,
@@ -46,6 +47,26 @@ export function LoginPage() {
       dateOfBirth: '',
     },
   })
+
+  // Get logo URL with validation (using clinic data from auth store)
+  const getLogoUrl = () => {
+    if (logoError || !clinic?.logo_url) {
+      return '/assets/assist-logo.png' // Fallback to TensorLinks logo
+    }
+
+    const trimmedUrl = clinic.logo_url.trim()
+    if (
+      trimmedUrl &&
+      (trimmedUrl.startsWith('http://') ||
+        trimmedUrl.startsWith('https://') ||
+        trimmedUrl.startsWith('assets/') ||
+        trimmedUrl.startsWith('/'))
+    ) {
+      return trimmedUrl
+    }
+
+    return '/assets/assist-logo.png' // Fallback
+  }
 
   // Format phone number for API (+1XXXXXXXXXX)
   const formatPhoneForApi = (phone: string): string => {
@@ -185,15 +206,21 @@ export function LoginPage() {
     <Card className="w-full max-w-md shadow-xl">
       {!showOtpVerification ? (
         <>
-          <CardHeader className="space-y-1 text-center">
-            <div className="mx-auto mb-4 h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-xl">P</span>
-              </div>
+          <CardHeader className="space-y-3 text-center">
+            {/* Clinic Logo and Name */}
+            <div className="flex flex-col items-center gap-3 mb-2">
+              <img
+                src={getLogoUrl()}
+                alt="Clinic Logo"
+                className="h-20 w-auto max-w-[200px] object-contain"
+                onError={() => setLogoError(true)}
+              />
+              <h1 className="text-xl font-semibold text-foreground">
+                {clinic?.displayName || 'Patient Portal'}
+              </h1>
             </div>
-            <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
-            <CardDescription>
-              Sign in to access your patient portal
+            <CardDescription className="text-base">
+              Login to access your patient portal
             </CardDescription>
           </CardHeader>
           <CardContent>

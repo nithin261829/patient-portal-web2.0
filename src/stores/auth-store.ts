@@ -18,6 +18,7 @@ interface AuthState {
   clientId: string
   orgId: string
   tenantId: string
+  orgTenantId: string | null
 
   // Actions
   setToken: (accessToken: string, refreshToken?: string) => void
@@ -26,7 +27,7 @@ interface AuthState {
   logout: () => void
   clearError: () => void
   setLoading: (loading: boolean) => void
-  updateClientConfig: (config: { client_id?: string; org_id?: string }) => void
+  updateClientConfig: (config: { client_id?: string; org_id?: string; org_tenant_id?: string }) => void
 
   // Computed
   getDecodedToken: () => AuthToken | null
@@ -49,12 +50,14 @@ export const useAuthStore = create<AuthState>()(
       clientId: environment.clientId || environment.tenantId,
       orgId: environment.orgId,
       tenantId: environment.tenantId,
+      orgTenantId: null,
 
       // Add method to update client config from API
-      updateClientConfig: (config: { client_id?: string; org_id?: string }) => {
+      updateClientConfig: (config: { client_id?: string; org_id?: string; org_tenant_id?: string }) => {
         set({
           clientId: config.client_id || get().clientId,
           orgId: config.org_id || get().orgId,
+          orgTenantId: config.org_tenant_id || get().orgTenantId,
         })
       },
 

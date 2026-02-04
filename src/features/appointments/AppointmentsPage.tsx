@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, isPast } from 'date-fns'
+import { format, parse, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, isPast, startOfWeek, endOfWeek, isSameMonth } from 'date-fns'
 import {
   Calendar,
   ChevronLeft,
@@ -32,11 +32,19 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import type { Appointment } from '@/types'
 
 type ViewMode = 'list' | 'calendar'
-type FilterTab = 'upcoming' | 'past' | 'all'
+type FilterTab = 'upcoming' | 'planned' | 'past' | 'all'
+
+// Helper to parse appointment datetime consistently (matching Angular format)
+const parseAppointmentDate = (dateTimeStr: string): Date => {
+  // Check if it's ISO format (with T) or local format (yyyy-MM-dd HH:mm:ss)
+  return dateTimeStr.includes('T')
+    ? new Date(dateTimeStr) // ISO format (legacy)
+    : parse(dateTimeStr, 'yyyy-MM-dd HH:mm:ss', new Date()) // Local format (matching Angular)
+}
 
 export function AppointmentsPage() {
   const navigate = useNavigate()
-  const { patient, clientId } = useAuthStore()
+  const { patient, clientId, isAuthenticated, isTokenExpired, accessToken } = useAuthStore()
   const isMobile = useIsMobile()
 
   const [appointments, setAppointments] = useState<Appointment[]>([])
@@ -52,45 +60,120 @@ export function AppointmentsPage() {
 
   useEffect(() => {
     fetchAppointments()
-  }, [clientId, patient?.patientId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, patient])
 
   const fetchAppointments = async () => {
-    if (!clientId || !patient?.patientId) return
+    // Log auth status for debugging (but don't block)
+    console.log('[AppointmentsPage] Auth status:', {
+      isAuthenticated,
+      hasToken: !!accessToken,
+      isExpired: isTokenExpired?.() || false,
+    })
+
+    // Handle different possible field names for patient ID
+    const patientId = (patient as any)?.patientId ||
+                      (patient as any)?.patient_id ||
+                      (patient as any)?.id ||
+                      (patient as any)?.patientNumber
+
+    if (!clientId || !patientId) {
+      console.warn('[AppointmentsPage] Missing clientId or patientId:', { clientId, patient })
+      return
+    }
 
     setIsLoading(true)
     try {
-      const response = await apiService.patient.getAppointments(clientId, patient.patientId)
-      setAppointments(response.data || [])
-    } catch (error) {
-      console.error('Error fetching appointments:', error)
-      toast.error('Failed to load appointments')
+      console.log('[AppointmentsPage] Fetching appointments for patient:', patientId)
+      const response = await apiService.patient.getAppointments(clientId, patientId)
+      const appointmentsList = response.data || []
+
+      console.log('[AppointmentsPage] Fetched appointments:', appointmentsList.length)
+      if (appointmentsList.length > 0) {
+        console.log('[AppointmentsPage] Sample appointment:', appointmentsList[0])
+      }
+
+      setAppointments(appointmentsList)
+    } catch (error: any) {
+      console.error('[AppointmentsPage] Error fetching appointments:', error)
+
+      // Check for signature verification failure
+      if (error.response?.data?.detail?.includes('Signature verification failed')) {
+        console.error('[AppointmentsPage] Token signature verification failed - token is invalid')
+        toast.error('Session expired. Please log in again.', {
+          action: {
+            label: 'Clear & Login',
+            onClick: () => {
+              if (typeof window !== 'undefined' && (window as any).clearAuth) {
+                (window as any).clearAuth()
+              } else {
+                navigate('/login')
+              }
+            },
+          },
+        })
+      } else {
+        toast.error('Failed to load appointments')
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Filter appointments
-  const filteredAppointments = appointments.filter((apt) => {
-    const aptDate = new Date(apt.appointmentDateTime)
-    const now = new Date()
+  // Categorize appointments (matching Angular logic)
+  const now = new Date()
+  const isCompleted = (status: string) => {
+    const lowerStatus = status?.toLowerCase() || ''
+    return lowerStatus === 'completed' || lowerStatus === 'complete'
+  }
+  const isPlanned = (status: string) => {
+    const lowerStatus = status?.toLowerCase() || ''
+    return lowerStatus === 'planned'
+  }
 
-    if (filterTab === 'upcoming') return aptDate > now
-    if (filterTab === 'past') return aptDate <= now
-    return true
-  }).sort((a, b) => {
-    const dateA = new Date(a.appointmentDateTime).getTime()
-    const dateB = new Date(b.appointmentDateTime).getTime()
-    return filterTab === 'past' ? dateB - dateA : dateA - dateB
-  })
+  // Upcoming: future date AND not completed
+  const upcomingAppointments = appointments.filter((apt) => {
+    const aptDate = parseAppointmentDate(apt.appointmentDateTime)
+    return aptDate >= now && !isCompleted(apt.appointmentStatus)
+  }).sort((a, b) => parseAppointmentDate(a.appointmentDateTime).getTime() - parseAppointmentDate(b.appointmentDateTime).getTime())
 
-  // Calendar helpers
+  // Planned: appointments that need to be scheduled
+  const plannedAppointments = appointments.filter((apt) =>
+    isPlanned(apt.appointmentStatus)
+  ).sort((a, b) => parseAppointmentDate(a.appointmentDateTime).getTime() - parseAppointmentDate(b.appointmentDateTime).getTime())
+
+  // Past: past date OR completed status
+  const pastAppointments = appointments.filter((apt) => {
+    const aptDate = parseAppointmentDate(apt.appointmentDateTime)
+    return aptDate < now || isCompleted(apt.appointmentStatus)
+  }).sort((a, b) => parseAppointmentDate(b.appointmentDateTime).getTime() - parseAppointmentDate(a.appointmentDateTime).getTime())
+
+  // Filter based on selected tab
+  const filteredAppointments = (() => {
+    switch (filterTab) {
+      case 'upcoming':
+        return upcomingAppointments
+      case 'planned':
+        return plannedAppointments
+      case 'past':
+        return pastAppointments
+      case 'all':
+        return [...upcomingAppointments, ...plannedAppointments, ...pastAppointments]
+      default:
+        return appointments
+    }
+  })()
+
+  // Calendar helpers - show complete weeks (6 weeks total)
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
-  const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd })
+  const calendarStart = startOfWeek(monthStart)
+  const calendarEnd = endOfWeek(monthEnd)
+  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd })
 
   const getAppointmentsForDay = (day: Date) => {
     return appointments.filter((apt) =>
-      isSameDay(new Date(apt.appointmentDateTime), day)
+      isSameDay(parseAppointmentDate(apt.appointmentDateTime), day)
     )
   }
 
@@ -144,7 +227,21 @@ export function AppointmentsPage() {
     navigate(`/dashboard/appointments/${appointmentId}`)
   }
 
-  const upcomingCount = appointments.filter((a) => new Date(a.appointmentDateTime) > new Date()).length
+  const upcomingCount = upcomingAppointments.length
+  const plannedCount = plannedAppointments.length
+  const pastCount = pastAppointments.length
+
+  // Debug logging
+  useEffect(() => {
+    if (appointments.length > 0) {
+      console.log('[AppointmentsPage] Categorization:', {
+        total: appointments.length,
+        upcoming: upcomingCount,
+        planned: plannedCount,
+        past: pastCount
+      })
+    }
+  }, [appointments.length, upcomingCount, plannedCount, pastCount])
 
   return (
     <div className={cn("space-y-4", !isMobile && "space-y-6")}>
@@ -178,7 +275,7 @@ export function AppointmentsPage() {
           value={filterTab}
           onValueChange={(v) => setFilterTab(v as FilterTab)}
         >
-          <TabsList className={cn(isMobile && "grid grid-cols-3")}>
+          <TabsList className={cn(isMobile ? "grid grid-cols-4" : "")}>
             <TabsTrigger value="upcoming" className={cn(isMobile && "text-xs")}>
               Upcoming
               {upcomingCount > 0 && (
@@ -187,7 +284,22 @@ export function AppointmentsPage() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="past" className={cn(isMobile && "text-xs")}>Past</TabsTrigger>
+            {plannedCount > 0 && (
+              <TabsTrigger value="planned" className={cn(isMobile && "text-xs")}>
+                Planned
+                <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-xs">
+                  {plannedCount}
+                </Badge>
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="past" className={cn(isMobile && "text-xs")}>
+              Past
+              {pastCount > 0 && !isMobile && (
+                <Badge variant="outline" className="ml-1.5 h-5 px-1.5 text-xs">
+                  {pastCount}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="all" className={cn(isMobile && "text-xs")}>All</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -239,9 +351,12 @@ export function AppointmentsPage() {
               "text-muted-foreground mb-4",
               isMobile && "text-sm"
             )}>
-              {filterTab === 'upcoming' ? 'Schedule your next visit' : 'No appointments found'}
+              {filterTab === 'upcoming' && 'Schedule your next visit'}
+              {filterTab === 'planned' && 'No planned appointments'}
+              {filterTab === 'past' && 'No past appointments'}
+              {filterTab === 'all' && 'No appointments found'}
             </p>
-            {filterTab === 'upcoming' && (
+            {(filterTab === 'upcoming' || filterTab === 'planned') && (
               <Button onClick={() => navigate('/dashboard/appointments/schedule')}>
                 <Plus className="h-4 w-4 mr-2" />
                 Schedule Appointment
@@ -304,14 +419,11 @@ export function AppointmentsPage() {
             </div>
 
             <div className="grid grid-cols-7 gap-1">
-              {Array.from({ length: monthStart.getDay() }).map((_, i) => (
-                <div key={`empty-${i}`} className="aspect-square" />
-              ))}
-
-              {daysInMonth.map((day) => {
+              {calendarDays.map((day) => {
                 const dayAppointments = getAppointmentsForDay(day)
                 const hasAppointments = dayAppointments.length > 0
                 const isPastDay = isPast(day) && !isToday(day)
+                const isCurrentMonth = isSameMonth(day, currentMonth)
 
                 return (
                   <div
@@ -320,25 +432,28 @@ export function AppointmentsPage() {
                       "aspect-square p-1 rounded-lg border border-transparent transition-colors",
                       isToday(day) && "bg-primary/10 border-primary/30",
                       hasAppointments && !isToday(day) && "bg-muted/50",
-                      isPastDay && "opacity-50"
+                      isPastDay && "opacity-50",
+                      !isCurrentMonth && "opacity-30"
                     )}
                   >
                     <div className="h-full flex flex-col">
                       <span className={cn(
                         "text-sm font-medium",
-                        isToday(day) && "text-primary"
+                        isToday(day) && "text-primary",
+                        !isCurrentMonth && "text-muted-foreground"
                       )}>
                         {format(day, 'd')}
                       </span>
-                      {hasAppointments && (
+                      {hasAppointments && isCurrentMonth && (
                         <div className="flex-1 flex flex-col gap-0.5 mt-1 overflow-hidden">
                           {dayAppointments.slice(0, 2).map((apt) => (
                             <div
                               key={apt.appointmentNumber}
                               className="text-xs px-1 py-0.5 rounded bg-primary/20 text-primary truncate cursor-pointer hover:bg-primary/30"
                               onClick={() => handleViewDetails(apt.appointmentNumber)}
+                              title={apt.appointmentTypeName}
                             >
-                              {format(new Date(apt.appointmentDateTime), 'h:mm a')}
+                              {format(parseAppointmentDate(apt.appointmentDateTime), 'h:mm a')}
                             </div>
                           ))}
                           {dayAppointments.length > 2 && (
@@ -377,10 +492,10 @@ export function AppointmentsPage() {
                   {appointmentToCancel.appointmentTypeName || 'Appointment'}
                 </p>
                 <p className={cn("text-muted-foreground", isMobile ? "text-xs" : "text-sm")}>
-                  {format(new Date(appointmentToCancel.appointmentDateTime), 'EEEE, MMMM d, yyyy')}
+                  {format(parseAppointmentDate(appointmentToCancel.appointmentDateTime), 'EEEE, MMMM d, yyyy')}
                 </p>
                 <p className={cn("text-muted-foreground", isMobile ? "text-xs" : "text-sm")}>
-                  {format(new Date(appointmentToCancel.appointmentDateTime), 'h:mm a')}
+                  {format(parseAppointmentDate(appointmentToCancel.appointmentDateTime), 'h:mm a')}
                 </p>
               </div>
             </div>

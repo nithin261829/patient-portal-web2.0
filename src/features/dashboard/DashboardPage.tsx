@@ -39,11 +39,19 @@ export function DashboardPage() {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!clientId || !patient?.patientId) return
+      console.log('Dashboard: Checking auth data...', { clientId, patientId: patient?.patientId })
+
+      if (!clientId || !patient?.patientId) {
+        console.warn('Dashboard: Missing clientId or patientId')
+        setIsLoading(false)
+        return
+      }
 
       setIsLoading(true)
       try {
+        console.log('Dashboard: Fetching appointments...')
         const appointmentsRes = await apiService.patient.getAppointments(clientId, patient.patientId)
+        console.log('Dashboard: Appointments response:', appointmentsRes)
         const now = new Date()
         const upcoming = (appointmentsRes.data || [])
           .filter((apt: Appointment) => new Date(apt.appointmentDateTime) > now)
@@ -53,25 +61,18 @@ export function DashboardPage() {
           .slice(0, 3)
         setUpcomingAppointments(upcoming)
 
+        console.log('Dashboard: Fetching balance...')
         const balanceRes = await apiService.patient.getAgingBalance(clientId, patient.patientId)
+        console.log('Dashboard: Balance response:', balanceRes)
         setBalance(balanceRes.data)
 
+        console.log('Dashboard: Fetching forms...')
         const formsRes = await apiService.forms.getAllForms(clientId, patient.patientId)
+        console.log('Dashboard: Forms response:', formsRes)
         const pending = (formsRes.data || []).filter((f: { status?: string }) => f.status === 'draft' || f.status === 'pending').length
         setPendingForms(pending)
       } catch (error) {
-        console.error('Error fetching dashboard data:', error)
-        setUpcomingAppointments([
-          {
-            appointmentNumber: '1',
-            appointmentDateTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-            appointmentTypeName: 'Regular Checkup',
-            appointmentStatus: 'confirmed',
-            providerName: 'Dr. Sarah Johnson'
-          } as any
-        ])
-        setBalance({ totalBalance: 250 } as any)
-        setPendingForms(2)
+        console.error('Dashboard: Error fetching data:', error)
       } finally {
         setIsLoading(false)
       }
@@ -279,26 +280,145 @@ export function DashboardPage() {
         "grid gap-4",
         !isMobile && "grid-cols-3"
       )}>
-        {/* Upcoming Appointments */}
-        <Card className={cn(!isMobile && "col-span-2")}>
-        <CardContent className={cn("p-0", isMobile ? "" : "")}>
-          {/* Header */}
-          <div className={cn(
-            "flex items-center justify-between border-b border-border",
-            isMobile ? "px-4 py-3" : "px-5 py-4"
-          )}>
-            <h2 className={cn(
-              "font-semibold text-foreground",
-              isMobile ? "text-base" : "text-lg"
-            )}>
-              Upcoming Appointments
-            </h2>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/dashboard/appointments" className="text-primary">
-                View all <ChevronRight className="h-4 w-4 ml-1" />
-              </Link>
-            </Button>
-          </div>
+        {/* Left Column - Appointments and Account Summary */}
+        <div className={cn("space-y-4", !isMobile && "col-span-2")}>
+          {/* Account Summary Card */}
+          <Card>
+            <CardContent className="p-0">
+              {/* Header */}
+              <div className={cn(
+                "flex items-center justify-between border-b border-border",
+                isMobile ? "px-4 py-3" : "px-5 py-4"
+              )}>
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-primary" />
+                  <h2 className={cn(
+                    "font-semibold text-foreground",
+                    isMobile ? "text-base" : "text-lg"
+                  )}>
+                    Account Summary
+                  </h2>
+                </div>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/dashboard/payments" className="text-primary">
+                    View details <ChevronRight className="h-4 w-4 ml-1" />
+                  </Link>
+                </Button>
+              </div>
+
+              {/* Balance Overview */}
+              <div className={cn(isMobile ? "p-4" : "p-6")}>
+                <div className="rounded-lg bg-primary/5 border border-primary/10 p-4 mb-4">
+                  <p className="text-sm text-muted-foreground mb-1">Your Current Balance</p>
+                  <p className={cn(
+                    "font-bold",
+                    isMobile ? "text-2xl" : "text-3xl",
+                    hasOutstandingBalance ? "text-primary" : "text-success"
+                  )}>
+                    {formatCurrency(balance?.PatEstBal ?? balance?.totalBalance ?? 0)}
+                  </p>
+                  {hasOutstandingBalance && balance && (balance.Total ?? 0) > 0 && (
+                    <Button
+                      className="mt-3"
+                      size="sm"
+                      onClick={() => navigate('/dashboard/payments/new')}
+                    >
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Pay Now
+                    </Button>
+                  )}
+                  {(!hasOutstandingBalance || (balance && (balance.Total ?? 0) <= 0)) && (
+                    <div className="flex items-center gap-2 mt-2 text-success">
+                      <Badge variant="success" className="text-xs">
+                        Paid in Full
+                      </Badge>
+                      <span className="text-xs">Thank you!</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Balance Breakdown */}
+                {balance && (balance.Total !== undefined || balance.InsEst !== undefined) && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-foreground mb-3">Balance Breakdown</p>
+                    <div className="space-y-1.5 text-sm">
+                      {balance.Total !== undefined && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total Charges</span>
+                          <span className="font-medium">{formatCurrency(balance.Total)}</span>
+                        </div>
+                      )}
+                      {balance.InsEst !== undefined && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Insurance Estimate</span>
+                          <span className="font-medium">{formatCurrency(balance.InsEst)}</span>
+                        </div>
+                      )}
+                      {balance.PatEstBal !== undefined && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Patient Responsibility</span>
+                          <span className="font-medium text-primary">{formatCurrency(balance.PatEstBal)}</span>
+                        </div>
+                      )}
+
+                      {/* Aging Buckets */}
+                      {(balance.Bal_0_30 !== undefined || balance.Bal_31_60 !== undefined) && (
+                        <>
+                          <div className="border-t pt-2 mt-2" />
+                          <p className="text-xs font-medium text-muted-foreground mb-1">Aging</p>
+                          {balance.Bal_0_30 !== undefined && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">0-30 Days</span>
+                              <span>{formatCurrency(balance.Bal_0_30)}</span>
+                            </div>
+                          )}
+                          {balance.Bal_31_60 !== undefined && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">31-60 Days</span>
+                              <span>{formatCurrency(balance.Bal_31_60)}</span>
+                            </div>
+                          )}
+                          {balance.Bal_61_90 !== undefined && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">61-90 Days</span>
+                              <span>{formatCurrency(balance.Bal_61_90)}</span>
+                            </div>
+                          )}
+                          {balance.BalOver90 !== undefined && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Over 90 Days</span>
+                              <span>{formatCurrency(balance.BalOver90)}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Upcoming Appointments */}
+          <Card>
+            <CardContent className={cn("p-0", isMobile ? "" : "")}>
+              {/* Header */}
+              <div className={cn(
+                "flex items-center justify-between border-b border-border",
+                isMobile ? "px-4 py-3" : "px-5 py-4"
+              )}>
+                <h2 className={cn(
+                  "font-semibold text-foreground",
+                  isMobile ? "text-base" : "text-lg"
+                )}>
+                  Upcoming Appointments
+                </h2>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/dashboard/appointments" className="text-primary">
+                    View all <ChevronRight className="h-4 w-4 ml-1" />
+                  </Link>
+                </Button>
+              </div>
 
           {/* Appointments List */}
           {upcomingAppointments.length > 0 ? (
@@ -401,56 +521,12 @@ export function DashboardPage() {
           )}
         </CardContent>
       </Card>
+        </div>
 
-        {/* Clinic Info */}
+        {/* Right Column - Clinic Info */}
         <ClinicInfo />
       </div>
 
-      {/* Quick Actions - Desktop Only */}
-      {!isMobile && (
-        <div className="grid grid-cols-4 gap-4">
-          {[
-            {
-              icon: Calendar,
-              label: 'Schedule Visit',
-              path: '/dashboard/appointments/schedule',
-              description: 'Book an appointment'
-            },
-            {
-              icon: FileText,
-              label: 'Complete Forms',
-              path: '/dashboard/forms',
-              description: pendingForms > 0 ? `${pendingForms} forms pending` : 'All forms complete'
-            },
-            {
-              icon: CreditCard,
-              label: 'Make Payment',
-              path: '/dashboard/payments',
-              description: hasOutstandingBalance ? `${formatCurrency(balance?.totalBalance || 0)} due` : 'No balance due'
-            },
-            {
-              icon: User,
-              label: 'Update Profile',
-              path: '/dashboard/profile',
-              description: 'Manage your info'
-            }
-          ].map((action) => (
-            <Card
-              key={action.path}
-              className="cursor-pointer hover:border-primary/30 hover:shadow-sm transition-all"
-              onClick={() => navigate(action.path)}
-            >
-              <CardContent className="p-4 text-center">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                  <action.icon className="h-5 w-5 text-primary" />
-                </div>
-                <p className="font-medium text-foreground mb-0.5">{action.label}</p>
-                <p className="text-xs text-muted-foreground">{action.description}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

@@ -62,47 +62,6 @@ export function FormsPage() {
     } catch (error) {
       console.error('Error fetching forms:', error)
       toast.error('Failed to load forms')
-      // Demo data
-      setForms([
-        {
-          id: '1',
-          title: 'Patient Registration Form',
-          description: 'Complete your initial patient information including medical history and insurance details.',
-          category: 'Registration',
-          status: 'pending',
-          estimatedTime: 15,
-          isRequired: true,
-          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        },
-        {
-          id: '2',
-          title: 'Medical History Update',
-          description: 'Update your medical history information for your upcoming appointment.',
-          category: 'Medical',
-          status: 'in_progress',
-          estimatedTime: 10,
-          completedSections: 3,
-          totalSections: 5,
-          assignedBy: 'Dr. Smith'
-        },
-        {
-          id: '3',
-          title: 'Consent for Treatment',
-          description: 'Review and sign consent forms for your scheduled procedures.',
-          category: 'Legal',
-          status: 'pending',
-          estimatedTime: 5,
-          isRequired: true
-        },
-        {
-          id: '4',
-          title: 'Insurance Verification',
-          description: 'Verify your current insurance information.',
-          category: 'Insurance',
-          status: 'completed',
-          submittedDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
-        }
-      ])
     } finally {
       setIsLoading(false)
     }

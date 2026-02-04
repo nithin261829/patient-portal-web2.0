@@ -13,6 +13,7 @@ import { NewPatientPage } from '@/features/auth/NewPatientPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { AppointmentsPage } from '@/features/appointments/AppointmentsPage'
 import { ScheduleAppointmentPage } from '@/features/appointments/ScheduleAppointmentPage'
+import { RescheduleAppointmentPage } from '@/features/appointments/RescheduleAppointmentPage'
 import { FormsPage } from '@/features/forms/FormsPage'
 import { DynamicFormPage } from '@/features/forms/DynamicFormPage'
 import { PaymentsPage } from '@/features/payments/PaymentsPage'
@@ -109,7 +110,7 @@ export const router = createBrowserRouter([
       },
       {
         path: '/dashboard/appointments/:appointmentId/reschedule',
-        element: <PlaceholderPage title="Reschedule Appointment" />,
+        element: <RescheduleAppointmentPage />,
       },
       // Forms
       {

@@ -14,5 +14,14 @@ export default defineConfig({
   server: {
     port: 4200,
     host: true,
+    // Proxy API requests to backend (matches Angular proxy behavior)
+    proxy: {
+      '/api': {
+        target: 'http://localhost:4300',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
   },
 })

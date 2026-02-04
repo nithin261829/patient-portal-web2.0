@@ -1,4 +1,4 @@
-import { format, isToday, isTomorrow, isPast, differenceInDays } from 'date-fns'
+import { format, parse, isToday, isTomorrow, isPast, differenceInDays } from 'date-fns'
 import {
   Clock,
   User,
@@ -33,21 +33,75 @@ export function AppointmentCard({
   className
 }: AppointmentCardProps) {
   const isMobile = useIsMobile()
-  const appointmentDate = new Date(appointment.appointmentDateTime)
+
+  // Parse appointment datetime (format: 'yyyy-MM-dd HH:mm:ss' - matching Angular)
+  const appointmentDate = appointment.appointmentDateTime.includes('T')
+    ? new Date(appointment.appointmentDateTime) // ISO format (legacy)
+    : parse(appointment.appointmentDateTime, 'yyyy-MM-dd HH:mm:ss', new Date()) // Local format
+
   const isPastAppointment = isPast(appointmentDate)
   const daysUntil = differenceInDays(appointmentDate, new Date())
 
-  const getStatusConfig = (status: string) => {
-    const s = status?.toLowerCase() || ''
-    if (s.includes('confirm')) return { label: 'Confirmed', variant: 'success' as const, icon: CheckCircle2 }
-    if (s.includes('cancel')) return { label: 'Cancelled', variant: 'destructive' as const, icon: XCircle }
-    if (s.includes('complete')) return { label: 'Completed', variant: 'secondary' as const, icon: CheckCircle2 }
-    if (s.includes('reschedule')) return { label: 'Rescheduled', variant: 'info' as const, icon: CalendarClock }
-    return { label: 'Scheduled', variant: 'warning' as const, icon: Clock }
+  // Check if appointment is cancelled (matching Angular logic)
+  const isCancelled = () => {
+    const note = (appointment.notes || '').toLowerCase()
+    return note.includes('cancelled by')
   }
 
-  const statusConfig = getStatusConfig(appointment.appointmentStatus)
+  const getStatusConfig = (status: string, confirmed?: string) => {
+    // Check cancellation first
+    if (isCancelled()) {
+      return { label: 'Cancelled', variant: 'destructive' as const, icon: XCircle }
+    }
+
+    const s = status?.toLowerCase() || ''
+
+    // Check if confirmed (Angular logic: confirmed field + scheduled status)
+    if (confirmed === 'Confirmed' && s === 'scheduled') {
+      return { label: 'Confirmed', variant: 'success' as const, icon: CheckCircle2 }
+    }
+
+    // Status-based display
+    if (s === 'complete' || s === 'completed') {
+      return { label: 'Completed', variant: 'secondary' as const, icon: CheckCircle2 }
+    }
+    if (s === 'broken') {
+      return { label: 'Missed', variant: 'destructive' as const, icon: XCircle }
+    }
+    if (s === 'unschedlist') {
+      return { label: 'Cancelled', variant: 'destructive' as const, icon: XCircle }
+    }
+    if (s === 'planned') {
+      return { label: 'Planned', variant: 'secondary' as const, icon: CalendarClock }
+    }
+    if (s === 'scheduled') {
+      return { label: 'Scheduled', variant: 'default' as const, icon: Clock }
+    }
+
+    return { label: status || 'Unknown', variant: 'secondary' as const, icon: Clock }
+  }
+
+  const statusConfig = getStatusConfig(
+    appointment.appointmentStatus,
+    (appointment as any).confirmed
+  )
   const StatusIcon = statusConfig.icon
+
+  // Action button visibility logic (matching Angular)
+  const showConfirmButton = () => {
+    return appointment.appointmentStatus === 'Scheduled' &&
+           (appointment as any).confirmed !== 'Confirmed' &&
+           !isPastAppointment &&
+           !isCancelled()
+  }
+
+  const showRescheduleButton = () => {
+    return !isPastAppointment && !isCancelled()
+  }
+
+  const showCancelButton = () => {
+    return !isPastAppointment && !isCancelled()
+  }
 
   const getDateLabel = () => {
     if (isToday(appointmentDate)) return 'Today'
@@ -173,30 +227,39 @@ export function AppointmentCard({
 
       {/* Details */}
       <div className={cn(
-        "flex items-center gap-3 text-muted-foreground mb-4",
+        "space-y-2 text-muted-foreground mb-4",
         isMobile ? "text-xs" : "text-sm"
       )}>
-        <span className="flex items-center gap-1">
-          <Clock className="h-3.5 w-3.5" />
-          {getTimeDisplay()}
-        </span>
-        {appointment.duration && (
-          <span>{appointment.duration} min</span>
-        )}
-        {appointment.providerName && (
+        <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
-            <User className="h-3.5 w-3.5" />
-            Dr. {appointment.providerName}
+            <Clock className="h-3.5 w-3.5" />
+            {getTimeDisplay()}
           </span>
+          {(appointment.duration || appointment.lengthInMinutes) && (
+            <span>{appointment.duration || appointment.lengthInMinutes} minutes</span>
+          )}
+        </div>
+        {appointment.providerName && (
+          <div className="flex items-center gap-1">
+            <User className="h-3.5 w-3.5" />
+            {appointment.providerName}
+          </div>
+        )}
+        {(appointment as any).insuranceStatus && (
+          <div className="flex items-center gap-1">
+            <span className="font-medium">Insurance:</span>
+            <span>{(appointment as any).insuranceStatus}</span>
+          </div>
         )}
       </div>
 
-      {/* Actions */}
-      {!isPastAppointment && (
+      {/* Actions - Matching Angular visibility logic */}
+      {(showConfirmButton() || showRescheduleButton() || showCancelButton()) && (
         <div className="flex items-center gap-2">
-          {statusConfig.variant !== 'success' && onConfirm && (
+          {showConfirmButton() && onConfirm && (
             <Button
               size={isMobile ? "sm" : "default"}
+              variant="default"
               className="flex-1"
               onClick={() => onConfirm(appointment.appointmentNumber)}
             >
@@ -204,22 +267,25 @@ export function AppointmentCard({
               Confirm
             </Button>
           )}
-          {onReschedule && (
+          {showRescheduleButton() && onReschedule && (
             <Button
               variant="outline"
               size={isMobile ? "sm" : "default"}
+              className="flex-1"
               onClick={() => onReschedule(appointment.appointmentNumber)}
             >
+              <CalendarClock className="h-4 w-4 mr-1" />
               Reschedule
             </Button>
           )}
-          {onCancel && (
+          {showCancelButton() && onCancel && (
             <Button
               variant="ghost"
               size={isMobile ? "sm" : "default"}
-              className="text-error hover:text-error hover:bg-error/10"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
               onClick={() => onCancel(appointment.appointmentNumber)}
             >
+              <XCircle className="h-4 w-4 mr-1" />
               Cancel
             </Button>
           )}

@@ -74,35 +74,6 @@ export function PaymentsPage() {
     } catch (error) {
       console.error('Error fetching payments:', error)
       toast.error('Failed to load payments')
-      // Demo data
-      setPayments([
-        {
-          id: '1',
-          amount: 250.00,
-          description: 'Regular Checkup & Cleaning',
-          status: 'pending',
-          dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-          invoiceNumber: 'INV-2024-001',
-          providerName: 'Dr. Sarah Johnson'
-        },
-        {
-          id: '2',
-          amount: 75.00,
-          description: 'Copay - Dental Exam',
-          status: 'overdue',
-          dueDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          invoiceNumber: 'INV-2024-002'
-        },
-        {
-          id: '3',
-          amount: 450.00,
-          description: 'Cavity Filling - Tooth #14',
-          status: 'paid',
-          paidDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-          invoiceNumber: 'INV-2024-003',
-          paymentMethod: 'Visa •••• 4242'
-        }
-      ])
     } finally {
       setIsLoading(false)
     }

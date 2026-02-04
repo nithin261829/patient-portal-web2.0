@@ -31,23 +31,43 @@ export interface Appointment {
   appointmentTypeName?: string
   providerNumber?: string | number
   providerName?: string
+  providerDentist?: string
+  providerHygienist?: string
   operatoryNumber?: string | number
   duration?: number
+  lengthInMinutes?: number
   notes?: string
+  note?: string
+  confirmed?: string
+  insuranceStatus?: string | null
+  summary?: string
+  patientNumber?: string
+  isNewPatient?: string
+  isHygiene?: string
+  appointmentTypeNumber?: string | number
+  createdTimestamp?: string
 }
 
 export interface AppointmentSlot {
-  startTime: string
-  endTime: string
+  appointmentDateTime: string
+  start: Date | string
+  end: Date | string
   operatoryNumber: string | number
+  operatoryName?: string
   providerNumber?: string | number
-  available: boolean
+  providerName?: string
+  available?: boolean
+  // Additional fields from API response
+  [key: string]: any
 }
 
 export interface AppointmentType {
   appointmentTypeNumber: string | number
   appointmentTypeName: string
+  lengthInMinutes: number
   duration?: number
+  description?: string
+  category?: string
   color?: string
 }
 
@@ -107,6 +127,16 @@ export interface AccountBalance {
     over60: number
     over90: number
   }
+  // Full aging balance fields (matches backend API)
+  Bal_0_30?: number
+  Bal_31_60?: number
+  Bal_61_90?: number
+  BalOver90?: number
+  Total?: number
+  InsEst?: number  // Insurance Estimate
+  EstBal?: number  // Estimated Balance
+  PatEstBal?: number  // Patient Estimated Balance (what patient owes)
+  Unearned?: number
 }
 
 // Insurance Types
@@ -122,6 +152,57 @@ export interface Insurance {
     lastName: string
     dateOfBirth: string
   }
+}
+
+// Clinical Data Types (matching Angular implementation)
+export interface Prescription {
+  prescriptionId?: string | number
+  medicationName: string
+  dosage?: string
+  frequency?: string
+  prescribedDate?: string
+  endDate?: string
+  providerName?: string
+  instructions?: string
+  refills?: number
+  status?: 'active' | 'completed' | 'discontinued'
+}
+
+export interface TreatmentPlan {
+  treatmentPlanId?: string | number
+  planName?: string
+  description?: string
+  startDate?: string
+  endDate?: string
+  status?: 'active' | 'completed' | 'pending'
+  procedures?: TreatmentProcedure[]
+  totalCost?: number
+  providerName?: string
+  notes?: string
+}
+
+export interface TreatmentProcedure {
+  procedureCode?: string
+  procedureName: string
+  toothNumber?: string
+  surface?: string
+  status?: 'planned' | 'in-progress' | 'completed'
+  estimatedCost?: number
+  completedDate?: string
+}
+
+export interface ProcedureHistory {
+  procedureId?: string | number
+  procedureCode?: string
+  procedureName: string
+  procedureDate: string
+  toothNumber?: string
+  surface?: string
+  providerName?: string
+  cost?: number
+  insurancePaid?: number
+  patientPaid?: number
+  notes?: string
 }
 
 // Auth Types

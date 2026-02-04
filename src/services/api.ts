@@ -19,15 +19,55 @@ const api: AxiosInstance = axios.create({
 let anonymousToken: string | null = null
 let tokenExpiry: number | null = null
 
-// Endpoints that need anonymous token
+// Endpoints that need anonymous token (matching Angular interceptor)
 const anonymousEndpoints = [
   '/patients/family_lookup',
   '/patients/create',
   '/patients/register',
+  '/forms/templates',
+  '/kiosk/activate-device',
+  '/kiosk/verify-pin',
+]
+
+// Patient form endpoints need anonymous token
+const anonymousFormEndpoints = [
+  '/forms/create',
+  '/forms/save',
+  '/forms/submit',
+]
+
+// Patient endpoints that require real user authentication
+const requiresUserAuth = [
+  '/appointments',
+  '/statement',
+  '/aging-balance',
+  '/payments',
+  '/prescriptions',
+  '/treatment-plans',
+  '/procedures',
+  '/insurance',
+  '/documents',
+  '/patients/profile',
 ]
 
 function needsAnonymousToken(url: string): boolean {
-  return anonymousEndpoints.some(endpoint => url.includes(endpoint))
+  // First, check if this is a user-authenticated endpoint - these NEVER use anonymous token
+  if (requiresUserAuth.some(endpoint => url.includes(endpoint))) {
+    return false
+  }
+
+  // Check if this is a general anonymous endpoint
+  if (anonymousEndpoints.some(endpoint => url.includes(endpoint))) {
+    return true
+  }
+
+  // Check if this is an anonymous form endpoint
+  if (anonymousFormEndpoints.some(endpoint => url.includes(endpoint))) {
+    return true
+  }
+
+  // Default: use real user auth
+  return false
 }
 
 function isAnonymousTokenValid(): boolean {
@@ -38,12 +78,37 @@ function isAnonymousTokenValid(): boolean {
 
 async function getAnonymousToken(): Promise<string | null> {
   try {
-    const { clientId, orgId } = useAuthStore.getState()
+    const { clientId, orgId, orgTenantId } = useAuthStore.getState()
 
-    const response = await axios.post(`${API_BASE_URL}/auth/exchange_anon_token`, {
+    // Construct tenant-specific API URL (matching Angular behavior)
+    let apiUrl = environment.apiUrl
+
+    // Try app state first
+    let tenant = orgTenantId
+
+    // Fallback to hostname extraction (same as Angular)
+    if (!tenant) {
+      const hostname = window.location.hostname
+      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        tenant = hostname.split('.')[0]
+      }
+    }
+
+    // Apply tenant subdomain if available (same as Angular)
+    if (tenant && apiUrl.startsWith('https://')) {
+      apiUrl = apiUrl.replace('https://', `https://${tenant}.`)
+    }
+
+    console.log('[AnonymousAuth] Getting anonymous token for:', {
+      clientId: clientId || environment.clientId,
+      orgId: orgId || environment.orgId,
+      apiUrl
+    })
+
+    const response = await axios.post(`${apiUrl}/auth/exchange_anon_token`, {
       id_token: 'anonymous',
-      org_id: orgId,
-      client_id: clientId,
+      org_id: orgId || environment.orgId,
+      client_id: clientId || environment.clientId,
       patient_id: 'anonymous',
     }, {
       headers: {
@@ -56,10 +121,12 @@ async function getAnonymousToken(): Promise<string | null> {
       anonymousToken = response.data.access_token
       // Token valid for 1 hour
       tokenExpiry = Date.now() + 60 * 60 * 1000
+      console.log('[AnonymousAuth] Token obtained successfully')
       return anonymousToken
     }
+    console.warn('[AnonymousAuth] No access_token in response:', response.data)
   } catch (error) {
-    console.error('Failed to get anonymous token:', error)
+    console.error('[AnonymousAuth] Failed to get token:', error)
   }
   return null
 }
@@ -71,6 +138,7 @@ api.interceptors.request.use(
 
     // Check if this endpoint needs anonymous token
     if (needsAnonymousToken(url)) {
+      console.log('[API] Using anonymous token for:', url)
       let token = anonymousToken
       if (!isAnonymousTokenValid()) {
         token = await getAnonymousToken()
@@ -82,9 +150,27 @@ api.interceptors.request.use(
     }
 
     // For other endpoints, use the regular access token
-    const accessToken = useAuthStore.getState().accessToken
+    const authStore = useAuthStore.getState()
+    const { accessToken, isTokenExpired, getDecodedToken } = authStore
+
     if (accessToken) {
+      // Check if token is expired
+      if (isTokenExpired()) {
+        console.warn('[API] Access token is expired for:', url)
+        const decoded = getDecodedToken()
+        if (decoded) {
+          console.warn('[API] Token details:', {
+            exp: new Date(decoded.exp * 1000).toISOString(),
+            now: new Date().toISOString(),
+            expired: decoded.exp * 1000 < Date.now(),
+          })
+        }
+      } else {
+        console.log('[API] Using user access token for:', url)
+      }
       config.headers.Authorization = `Bearer ${accessToken}`
+    } else {
+      console.warn('[API] No access token available for:', url)
     }
     return config
   },
@@ -97,13 +183,60 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    // Handle 401 Unauthorized - Token expired
-    if (error.response?.status === 401) {
-      const authStore = useAuthStore.getState()
+    const originalRequest = error.config as any
 
-      // Check if token is expired and try to refresh
-      if (authStore.isTokenExpired()) {
-        // For now, just logout. Can implement refresh token logic here
+    // Handle 401 Unauthorized
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      const authStore = useAuthStore.getState()
+      const { accessToken, refreshToken, isTokenExpired } = authStore
+
+      console.error('[API] 401 Error:', {
+        url: originalRequest?.url,
+        hasAccessToken: !!accessToken,
+        hasRefreshToken: !!refreshToken,
+        isExpired: isTokenExpired(),
+        error: error.response?.data,
+      })
+
+      // Debug the token
+      if (accessToken) {
+        try {
+          const { debugToken } = await import('@/utils/auth-debug')
+          debugToken(accessToken)
+        } catch (e) {
+          console.error('[API] Error debugging token:', e)
+        }
+      }
+
+      // Check if we have a refresh token and the access token is expired
+      if (refreshToken && isTokenExpired()) {
+        originalRequest._retry = true
+
+        try {
+          console.log('[API] Attempting token refresh...')
+          const response = await api.post('/auth/refresh_token', {
+            refresh_token: refreshToken,
+          })
+
+          if (response.data?.access_token) {
+            // Update tokens in store
+            authStore.setToken(response.data.access_token, response.data.refresh_token)
+
+            // Retry the original request with new token
+            originalRequest.headers.Authorization = `Bearer ${response.data.access_token}`
+            console.log('[API] Token refreshed successfully, retrying request')
+            return api(originalRequest)
+          }
+        } catch (refreshError) {
+          console.error('[API] Token refresh failed:', refreshError)
+          // Refresh failed, logout user
+          authStore.logout()
+          window.location.href = '/login'
+          return Promise.reject(refreshError)
+        }
+      } else {
+        // No refresh token or already retried, logout
+        console.log('[API] No refresh token available or retry failed, logging out')
         authStore.logout()
         window.location.href = '/login'
       }
@@ -163,12 +296,29 @@ export const apiService = {
 
     getPayments: (clientId: string, patientId: string) =>
       api.get(`/${clientId}/patients/${patientId}/payments`),
+
+    // Clinical data endpoints (matching Angular implementation)
+    getPrescriptions: (clientId: string, patientId: string) =>
+      api.get(`/${clientId}/patients/${patientId}/prescriptions`),
+
+    getTreatmentPlans: (clientId: string, patientId: string) =>
+      api.get(`/${clientId}/patients/${patientId}/treatment-plans`),
+
+    getProcedureHistory: (clientId: string, patientId: string) =>
+      api.get(`/${clientId}/patients/${patientId}/procedures`),
+
+    getInsurance: (clientId: string, patientId: string) =>
+      api.get(`/${clientId}/patients/${patientId}/insurance`),
   },
 
   // Appointments
   appointments: {
     getTypes: () =>
       api.post('/appointment/types', {}),
+
+    // Get appointment types by treatment description (agentic search)
+    getTypesByDescription: (data: { treatmentRequest: string; procedureCode?: string | null; isPlannedTreatment?: boolean }) =>
+      api.post('/appointment/types', data),
 
     getSlots: (data: { startDate: string; endDate?: string; operatories: string; lengthInMinutes?: number }) =>
       api.post('/appointment/slots', data),
@@ -231,7 +381,30 @@ export const apiService = {
   // Documents
   documents: {
     getAll: (clientId: string, patientId: string) =>
-      api.get(`/${clientId}/patients/${patientId}/documents/all`),
+      api.get(`/${clientId}/patients/${patientId}/documents`),
+
+    upload: (clientId: string, patientId: string, formData: FormData) => {
+      // Don't set Content-Type - browser handles it for FormData
+      return api.post(`/${clientId}/patients/${patientId}/upload-documents`, formData, {
+        headers: {
+          'Content-Type': undefined, // Let browser set it
+        },
+      })
+    },
+
+    download: (clientId: string, patientId: string, documentId: string) =>
+      api.get(`/${clientId}/patients/${patientId}/download-documents/${documentId}`, {
+        responseType: 'blob',
+      }),
+  },
+
+  // Insurance
+  insurance: {
+    submit: (clientId: string, patientId: string, data: Record<string, unknown>) =>
+      api.post(`/${clientId}/patients/${patientId}/insurance/submit`, data),
+
+    get: (clientId: string, patientId: string) =>
+      api.get(`/${clientId}/patients/${patientId}/insurance`),
   },
 }
 

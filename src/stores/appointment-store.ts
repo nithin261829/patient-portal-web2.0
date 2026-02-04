@@ -5,8 +5,13 @@ export interface AppointmentSlot {
   appointmentDateTime: string;
   operatoryNumber: number;
   operatoryName?: string;
+  providerNumber?: string | number;
   providerName?: string;
   lengthInMinutes: number;
+  // Additional fields from API
+  start?: Date | string;
+  end?: Date | string;
+  [key: string]: any;
 }
 
 export interface AppointmentType {
@@ -15,11 +20,16 @@ export interface AppointmentType {
   lengthInMinutes: number;
   pattern?: string;
   category?: string;
+  description?: string;
 }
 
 export interface Operatory {
   operatoryNumber: number;
   operatoryName: string;
+  providerNumber: string | number;
+  providerDentist?: string;
+  providerHygienist?: string;
+  isHygiene?: string;
   abbrev?: string;
 }
 

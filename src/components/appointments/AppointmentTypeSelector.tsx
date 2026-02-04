@@ -1,10 +1,10 @@
-// Appointment Type Selector Component
+// Appointment Type Selector Component - Dropdown Version
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppointmentStore } from '@/stores/appointment-store';
-import { Clock, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Clock, Calendar } from 'lucide-react';
 
 export function AppointmentTypeSelector() {
   const {
@@ -19,12 +19,11 @@ export function AppointmentTypeSelector() {
       <Card>
         <CardHeader>
           <CardTitle>Select Appointment Type</CardTitle>
-          <CardDescription>Choose the type of appointment you need</CardDescription>
+          <CardDescription>We found matching appointment types for your need</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20 w-full" />
-          ))}
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-20 w-full" />
         </CardContent>
       </Card>
     );
@@ -34,55 +33,85 @@ export function AppointmentTypeSelector() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Select Appointment Type</CardTitle>
+          <CardTitle>No Matching Appointments</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground text-center py-8">
-            No appointment types available. Please contact the clinic.
+            No appointment types found. Please try a different description or contact the clinic.
           </p>
         </CardContent>
       </Card>
     );
   }
 
+  const handleValueChange = (value: string) => {
+    const type = appointmentTypes.find(t => t.appointmentTypeNumber.toString() === value);
+    if (type) {
+      setSelectedType(type);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Select Appointment Type</CardTitle>
-        <CardDescription>Choose the type of appointment you need</CardDescription>
+        <CardDescription>
+          We found {appointmentTypes.length} matching appointment type{appointmentTypes.length > 1 ? 's' : ''} for your need
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {appointmentTypes.map((type) => (
-          <button
-            key={type.appointmentTypeNumber}
-            onClick={() => setSelectedType(type)}
-            className={cn(
-              'w-full p-4 rounded-lg border-2 transition-all text-left',
-              'hover:border-primary/50 hover:shadow-sm',
-              selectedType?.appointmentTypeNumber === type.appointmentTypeNumber
-                ? 'border-primary bg-primary/5'
-                : 'border-border'
-            )}
-          >
+      <CardContent className="space-y-4">
+        <Select
+          value={selectedType?.appointmentTypeNumber?.toString()}
+          onValueChange={handleValueChange}
+        >
+          <SelectTrigger className="w-full h-12">
+            <SelectValue placeholder="Choose an appointment type..." />
+          </SelectTrigger>
+          <SelectContent>
+            {appointmentTypes.map((type) => (
+              <SelectItem
+                key={type.appointmentTypeNumber}
+                value={type.appointmentTypeNumber.toString()}
+                className="py-3"
+              >
+                <div className="flex items-center justify-between w-full gap-3">
+                  <span className="font-medium">{type.appointmentTypeName}</span>
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {type.lengthInMinutes} min
+                  </span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Selected Type Details */}
+        {selectedType && (
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
             <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">{type.appointmentTypeName}</h3>
-                  {selectedType?.appointmentTypeNumber === type.appointmentTypeNumber && (
-                    <Check className="w-5 h-5 text-primary" />
-                  )}
-                </div>
-                <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                  <Clock className="w-4 h-4" />
-                  <span>{type.lengthInMinutes} minutes</span>
-                </div>
+              <div className="space-y-1">
+                <h4 className="font-semibold text-base">{selectedType.appointmentTypeName}</h4>
+                {selectedType.description && (
+                  <p className="text-sm text-muted-foreground">{selectedType.description}</p>
+                )}
               </div>
-              {type.category && (
-                <Badge variant="secondary">{type.category}</Badge>
+              {selectedType.category && (
+                <Badge variant="secondary">{selectedType.category}</Badge>
               )}
             </div>
-          </button>
-        ))}
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Clock className="w-4 h-4" />
+                <span>{selectedType.lengthInMinutes} minutes</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Calendar className="w-4 h-4" />
+                <span>Appointment duration</span>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
